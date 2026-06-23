@@ -2,7 +2,6 @@ import streamlit as st
 import plotly.graph_objects as go
 import numpy as np
 import pandas as pd
-import time
 
 # ============================================================
 # PAGE CONFIG
@@ -185,7 +184,7 @@ elif selected_page == pages[1]:
         """, unsafe_allow_html=True)
 
 # ============================================================
-# SLIDE 3: UV-Vis SPECTROSCOPY (ANIMATED - FIXED)
+# SLIDE 3: UV-Vis SPECTROSCOPY (PLOTLY ANIMATION)
 # ============================================================
 elif selected_page == pages[2]:
     st.markdown("<h1>2. Task A – Spectroscopy</h1>", unsafe_allow_html=True)
@@ -194,44 +193,49 @@ elif selected_page == pages[2]:
     # --- Animation Controls ---
     col1, col2, col3 = st.columns([1, 2, 1])
     with col1:
-        st.markdown("**🎮 Animation Controls**")
+        st.markdown("**🎮 Controls**")
         play_anim = st.button("▶️ Play Animation", use_container_width=True)
         reset_anim = st.button("⏹️ Reset", use_container_width=True)
 
     with col3:
-        st.markdown("**🎯 Manual Control**")
+        st.markdown("**🎯 Manual**")
         conc = st.slider("Concentration (µg/mL)", 0.0, 10.0, 5.0, 0.1)
 
     # --- Animation State ---
-    if "anim_running" not in st.session_state:
-        st.session_state.anim_running = False
-        st.session_state.anim_conc = 0.0
+    if "frame_idx" not in st.session_state:
+        st.session_state.frame_idx = 0
+        st.session_state.playing = False
 
     if play_anim:
-        st.session_state.anim_running = True
-        st.session_state.anim_conc = 0.0
+        st.session_state.playing = True
+        st.session_state.frame_idx = 0
 
     if reset_anim:
-        st.session_state.anim_running = False
-        st.session_state.anim_conc = 0.0
+        st.session_state.playing = False
+        st.session_state.frame_idx = 0
 
-    # --- Update concentration ---
-    if st.session_state.anim_running:
-        st.session_state.anim_conc += 0.15
-        if st.session_state.anim_conc > 10.0:
-            st.session_state.anim_conc = 10.0
-            st.session_state.anim_running = False
+    # --- Generate frames for animation ---
+    frames = []
+    for i in range(0, 21):
+        c = i * 0.5
+        a = 0.0485 * c + 0.001
+        frames.append({
+            "conc": c,
+            "abs": a,
+            "label": f"{c:.1f} µg/mL"
+        })
+
+    # --- Update frame index if playing ---
+    if st.session_state.playing:
+        if st.session_state.frame_idx < len(frames) - 1:
+            st.session_state.frame_idx += 1
         else:
-            time.sleep(0.05)
-            st.rerun()
+            st.session_state.playing = False
 
-    # Use slider if not animating, else use anim value
-    if st.session_state.anim_running:
-        current_conc = st.session_state.anim_conc
-    else:
-        current_conc = conc
-
-    absorbance = 0.0485 * current_conc + 0.001
+    # --- Get current frame data ---
+    current_frame = frames[st.session_state.frame_idx]
+    current_conc = current_frame["conc"]
+    absorbance = current_frame["abs"]
 
     # --- Create the Plot ---
     fig = go.Figure()
@@ -258,7 +262,7 @@ elif selected_page == pages[2]:
         name='Your Sample',
         marker=dict(
             color='#ff6b6b',
-            size=18,
+            size=22,
             symbol='star',
             line=dict(color='white', width=2)
         ),
@@ -274,7 +278,7 @@ elif selected_page == pages[2]:
             y=y_trail,
             mode='lines',
             name='Path',
-            line=dict(color='rgba(255, 107, 107, 0.3)', width=2, dash='dash'),
+            line=dict(color='rgba(255, 107, 107, 0.4)', width=3, dash='dash'),
             showlegend=False
         ))
 
@@ -296,7 +300,7 @@ elif selected_page == pages[2]:
             zeroline=True,
             zerolinecolor='rgba(255,255,255,0.1)'
         ),
-        height=400,
+        height=420,
         margin=dict(l=50, r=30, t=30, b=50),
         hovermode='closest'
     )
@@ -340,8 +344,14 @@ elif selected_page == pages[2]:
         """, unsafe_allow_html=True)
 
     # --- Status indicator ---
-    if st.session_state.anim_running:
-        st.info(f"🎬 Animating... Concentration: {current_conc:.1f} µg/mL | Absorbance: {absorbance:.3f}")
+    if st.session_state.playing:
+        progress = (st.session_state.frame_idx / (len(frames) - 1)) * 100
+        st.progress(progress / 100)
+        st.info(f"🎬 Animating... Frame {st.session_state.frame_idx + 1}/{len(frames)} | Concentration: {current_conc:.1f} µg/mL | Absorbance: {absorbance:.3f}")
+        # Auto-rerun for animation
+        import time
+        time.sleep(0.15)
+        st.rerun()
     else:
         if current_conc >= 10:
             st.success("✅ Animation complete! The sample point has reached the top of the calibration curve.")
